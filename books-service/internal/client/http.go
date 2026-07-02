@@ -65,7 +65,7 @@ func (c *HTTPClient) Post(ctx context.Context, path string, body interface{}, he
 
 	res, err := c.Client.Do(req)
 	if err != nil {
-		slog.Error("HTTPClient.Get() client.Do", "error", err)
+		slog.Error("HTTPClient.Post() client.Do", "error", err)
 		return nil, err
 	}
 

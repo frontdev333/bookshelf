@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bookshelf/books-service/internal/client"
 	"bookshelf/books-service/internal/config"
 	"bookshelf/books-service/internal/handler"
+	middleware2 "bookshelf/books-service/internal/middleware"
 	"bookshelf/books-service/internal/repository"
 	"bookshelf/books-service/internal/service"
 	"context"
@@ -49,6 +51,8 @@ func main() {
 	bookHandler := handler.NewBookHandler(bookService)
 	reviewHandler := handler.NewReviewHandler(reviewService)
 
+	authClient := client.NewAuthClient(cfg.AuthServiceURL, 15*time.Second)
+
 	mux := chi.NewRouter()
 	mux.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173"},
@@ -73,7 +77,7 @@ func main() {
 		r.Get("/reviews/{reviewId}", reviewHandler.GetReview)
 
 		r.Group(func(r chi.Router) {
-			r.Use(bookHandler.AuthMiddleware)
+			r.Use(middleware2.AuthMiddleware(authClient))
 
 			r.Post("/books", bookHandler.Create)
 			r.Put("/books/{book_id}", bookHandler.Update)
@@ -82,10 +86,6 @@ func main() {
 			r.Put("/reviews/{reviewId}", reviewHandler.Update)
 			r.Delete("/reviews/{reviewId}", reviewHandler.Delete)
 		})
-	})
-
-	mux.Route("/internal/v1/auth", func(r chi.Router) {
-		r.Post("/verify", authS)
 	})
 
 	slog.Info("Server starting", "port", port)
