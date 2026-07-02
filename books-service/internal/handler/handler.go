@@ -14,7 +14,7 @@ import (
 
 type contextKey string
 
-const userIDKey contextKey = "userID"
+const UserIDKey contextKey = "userID"
 const requestID contextKey = "requestID"
 const version = "1.0.0"
 
@@ -110,5 +110,5 @@ func decode(r *http.Request, v interface{}) error {
 }
 
 func getUserID(ctx context.Context) string {
-	return ctx.Value(userIDKey).(string)
+	return ctx.Value(UserIDKey).(string)
 }

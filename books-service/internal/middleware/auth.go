@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bookshelf/books-service/internal/client"
+	"bookshelf/books-service/internal/handler"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -37,8 +38,8 @@ func AuthMiddleware(authClient *client.AuthClient) func(http.Handler) http.Handl
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), "user_id", vResp.UserID)
-			r.WithContext(ctx)
+			ctx := context.WithValue(r.Context(), handler.UserIDKey, vResp.UserID)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
