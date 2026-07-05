@@ -4,9 +4,12 @@ import (
 	"os"
 )
 
+const DefaultServiceKey = "dev-service-key"
+
 type Config struct {
 	Port           string
 	DatabaseURL    string
+	ServiceKey     string
 	AuthServiceURL string
 }
 
@@ -30,9 +33,16 @@ func Load() *Config {
 		jwtSecret = jwtEnv
 	}
 
+	svcSecretEnv := os.Getenv("SERVICE_KEY")
+	svcSecret := DefaultServiceKey
+	if svcSecretEnv != "" {
+		svcSecret = svcSecretEnv
+	}
+
 	return &Config{
 		Port:           port,
 		DatabaseURL:    dbUrl,
+		ServiceKey:     svcSecret,
 		AuthServiceURL: jwtSecret,
 	}
 }

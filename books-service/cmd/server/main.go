@@ -51,7 +51,7 @@ func main() {
 	bookHandler := handler.NewBookHandler(bookService)
 	reviewHandler := handler.NewReviewHandler(reviewService)
 
-	authClient := client.NewAuthClient(cfg.AuthServiceURL, 15*time.Second)
+	authClient := client.NewAuthClient(cfg.AuthServiceURL, cfg.ServiceKey, 15*time.Second)
 
 	mux := chi.NewRouter()
 	mux.Use(cors.Handler(cors.Options{

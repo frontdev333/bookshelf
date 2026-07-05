@@ -32,9 +32,9 @@ func main() {
 	defer db.Close()
 
 	repo := repository.NewUserRepository(db)
-	userServcie := service.NewUserService(repo, cfg.JWTSecret)
-	h := handler.New(userServcie, cfg.JWTSecret)
-	internalHandler := handler.NewInternalHandler(userServcie)
+	userService := service.NewUserService(repo, cfg.JWTSecret)
+	h := handler.New(userService, cfg.JWTSecret)
+	internalHandler := handler.NewInternalHandler(userService)
 
 	mux := chi.NewRouter()
 	mux.Use(cors.Handler(cors.Options{
@@ -59,7 +59,7 @@ func main() {
 		r.Post("/auth/login", h.Login)
 
 		r.Group(func(r chi.Router) {
-			r.Use(handler.AuthMiddleware(userServcie))
+			r.Use(handler.AuthMiddleware(userService))
 
 			r.Get("/users/me", h.GetMe)
 			r.Put("/users/me", h.UpdateMe)
@@ -67,6 +67,7 @@ func main() {
 	})
 
 	mux.Route("/internal/v1", func(r chi.Router) {
+		r.Use(handler.ServiceKeyMiddleware(cfg.ServiceKey))
 		r.Post("/auth/verify", internalHandler.VerifyToken)
 
 		r.Post("/users/batch", internalHandler.GetUsersByIDs)

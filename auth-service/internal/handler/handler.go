@@ -4,6 +4,7 @@ import (
 	"bookshelf/auth-svc/internal/domain"
 	"bookshelf/auth-svc/internal/service"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -78,7 +79,25 @@ func AuthMiddleware(svc *service.UserService) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
 
+func ServiceKeyMiddleware(expectedKey string) func(handler http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			actualSKey := r.Header.Get("X-Service-Key")
+			if len(strings.TrimSpace(actualSKey)) == 0 {
+				writeError(w, r, http.StatusForbidden, "SERVICEKEY_HEADER_REQUIRED", "missing service key")
+				return
+			}
+
+			if subtle.ConstantTimeCompare([]byte(expectedKey), []byte(actualSKey)) == 0 {
+				writeError(w, r, http.StatusForbidden, "INVALID_SERVICEKEY", "invalid service key")
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
