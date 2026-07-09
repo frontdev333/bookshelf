@@ -28,6 +28,18 @@ type UserPublic struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type UserSummary struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+}
+
+func (u *UserPublic) ToSummary() UserSummary {
+	return UserSummary{
+		ID:       u.ID,
+		Username: u.Username,
+	}
+}
+
 type VerifyResponse struct {
 	Valid     bool      `json:"valid"`
 	UserID    string    `json:"user_id"`
@@ -68,6 +80,41 @@ func (c *AuthClient) VerifyToken(ctx context.Context, token string) (*VerifyResp
 	}
 
 	return &dto, nil
+}
+
+func (c *AuthClient) GetUserByID(ctx context.Context, id string) (UserPublic, error) {
+	payload := struct {
+		ID string `json:"id"`
+	}{
+		ID: id,
+	}
+
+	pBytes, err := json.Marshal(payload)
+	if err != nil {
+		slog.Error("AuthClient.GetUsersByID", "error", err)
+		return UserPublic{}, err
+	}
+
+	resp, err := c.httpClient.Post(ctx, "/api/v1/users/me", pBytes, map[string]string{
+		"Content-Type":  "application/json",
+		"X-Service-Key": c.serviceKey,
+	})
+
+	if err != nil {
+		slog.Error("AuthClient.GetUsersByID", "error", err)
+		return UserPublic{}, err
+	}
+
+	defer resp.Body.Close()
+
+	var dto UserPublic
+
+	if err = json.NewDecoder(resp.Body).Decode(&dto); err != nil {
+		slog.Error("AuthClient.GetUsersByID", "error", err)
+		return UserPublic{}, err
+	}
+
+	return dto, nil
 }
 
 func (c *AuthClient) GetUsersByIDs(ctx context.Context, ids []string) ([]UserPublic, error) {

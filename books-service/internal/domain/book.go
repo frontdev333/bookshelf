@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"bookshelf/books-service/internal/client"
 	"database/sql"
 	"time"
 )
@@ -23,7 +24,7 @@ type BookResponse struct {
 	ID            string             `json:"id"`
 	Title         string             `json:"title"`
 	Author        string             `json:"author"`
-	Creator       domain.UserSummary `json:"creator"`
+	Creator       client.UserSummary `json:"creator"`
 	UserID        string             `json:"created_by"`
 	CreatedAt     time.Time          `json:"created_at"`
 	UpdatedAt     time.Time          `json:"updated_at"`
@@ -35,8 +36,8 @@ type BookResponse struct {
 }
 
 type BookListResponse struct {
-	Data       []BookResponse     `json:"data"`
-	Pagination domain2.Pagination `json:"pagination"`
+	Data       []BookResponse `json:"data"`
+	Pagination Pagination     `json:"pagination"`
 }
 
 type CreateBookRequest struct {
@@ -71,7 +72,7 @@ type ListParams struct {
 	Limit  int
 }
 
-func (b *Book) ToResponse(creator domain2.UserSummary, reviewsCount *int) *BookResponse {
+func (b *Book) ToResponse(creator client.UserSummary, reviewsCount *int) *BookResponse {
 	var desc *string
 	desc = nil
 

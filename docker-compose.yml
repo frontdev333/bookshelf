@@ -35,16 +35,45 @@ services:
       timeout: 5s
       retries: 5
 
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      - port=8081
+      - DATABASE_URL=postgres://postgres:postgres@auth-postgres:5432/auth?sslmode=disable
+    depends_on:
+      auth-postgres:
+        condition: service_healthy
+
+  books-service:
+    build:
+      context: ./books-service
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=postgres://postgres:postgres@books-postgres:5432/books?sslmode=disable
+      - AUTH_SERVICE_URL=http://auth-service:8081
+    depends_on:
+      books-postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+
   # Frontend Application
   frontend:
     build: ./frontend
     ports:
       - "5174:80"
     depends_on:
-      auth-postgres:
-        condition: service_healthy
-      books-postgres:
-        condition: service_healthy
+      auth-service:
+        condition: service_started
+      books-service:
+        condition: service_started
 
 volumes:
   auth_postgres_data:

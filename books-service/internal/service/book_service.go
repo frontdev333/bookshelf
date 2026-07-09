@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bookshelf/books-service/internal/client"
 	"bookshelf/books-service/internal/domain"
 	"bookshelf/books-service/internal/repository"
 	"context"
@@ -19,11 +20,21 @@ var (
 )
 
 type BookService struct {
-	bookRepo *repository.BookRepository
+	bookRepo   *repository.BookRepository
+	reviewRepo *repository.ReviewRepository
+	aClient    *client.AuthClient
 }
 
-func NewBookService(repo *repository.BookRepository) *BookService {
-	return &BookService{repo}
+func NewBookService(
+	repo *repository.BookRepository,
+	reviewRepo *repository.ReviewRepository,
+	aClient *client.AuthClient,
+) *BookService {
+	return &BookService{
+		repo,
+		reviewRepo,
+		aClient,
+	}
 }
 
 func (s *BookService) Create(
@@ -85,15 +96,12 @@ func (s *BookService) Create(
 		return nil, err
 	}
 
-	u, err := s.userRepo.GetByID(ctx, userId)
+	u, err := s.aClient.GetUserByID(ctx, userId)
 	if err != nil {
 		return nil, err
 	}
 
-	return b.ToResponse(domain2.UserSummary{
-		ID:       userId,
-		Username: u.Username,
-	}, &reviewsCount), nil
+	return b.ToResponse(u.ToSummary(), &reviewsCount), nil
 }
 
 func (s *BookService) GetByID(ctx context.Context, id string) (*domain.BookResponse, error) {
@@ -102,7 +110,7 @@ func (s *BookService) GetByID(ctx context.Context, id string) (*domain.BookRespo
 		return nil, err
 	}
 
-	u, err := s.userRepo.GetByID(ctx, b.CreatedBy)
+	u, err := s.aClient.GetUserByID(ctx, b.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -196,13 +204,19 @@ func (s *BookService) List(ctx context.Context, f domain.BookFilter) (*domain.Bo
 	booksIDs := make([]string, 0, len(list))
 
 	for _, v := range list {
-		creatorsIDs = append(creatorsIDs, v.CreatedBy)
+		creatorsIDs = append(creatorsIDs, v.UserID)
 		booksIDs = append(booksIDs, v.ID)
 	}
 
-	creators, err := s.userRepo.GetByIDs(ctx, creatorsIDs)
+	users, err := s.aClient.GetUsersByIDs(ctx, creatorsIDs)
 	if err != nil {
 		return nil, err
+	}
+
+	creators := make(map[string]client.UserPublic, len(users))
+
+	for _, v := range users {
+		creators[v.ID] = v
 	}
 
 	reviewsCounts, err := s.reviewRepo.GetReviewsCounts(ctx, booksIDs)
@@ -211,9 +225,9 @@ func (s *BookService) List(ctx context.Context, f domain.BookFilter) (*domain.Bo
 	}
 
 	for _, v := range list {
-		u, ok := creators[v.CreatedBy]
-		if !ok || u == nil {
-			slog.Error("BookService List()", "error", "creator not found", "user_id", v.CreatedBy)
+		u, ok := creators[v.UserID]
+		if !ok {
+			slog.Error("BookService List()", "error", "creator not found", "user_id", v.UserID)
 			continue
 		}
 
@@ -281,7 +295,7 @@ func (s *BookService) Update(ctx context.Context, userID, bookID string, req dom
 		return nil, err
 	}
 
-	u, err := s.userRepo.GetByID(ctx, userID)
+	u, err := s.aClient.GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}

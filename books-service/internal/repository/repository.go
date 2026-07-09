@@ -1,7 +1,6 @@
 package repository
 
 import (
-	repository2 "bookshelf/auth-service/internal/repository"
 	"context"
 	"database/sql"
 	"errors"
@@ -12,14 +11,12 @@ import (
 var ErrNotFound = errors.New("not found")
 
 type Repository struct {
-	User   *repository2.UserRepository
 	Book   *BookRepository
 	Review *ReviewRepository
 }
 
 func New(db *sqlx.DB) *Repository {
 	return &Repository{
-		User:   &repository2.UserRepository{db},
 		Book:   &BookRepository{db},
 		Review: &ReviewRepository{db},
 	}

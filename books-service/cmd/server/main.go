@@ -45,13 +45,13 @@ func main() {
 	bookRepo := repository.NewBookRepository(db)
 	reviewRepo := repository.NewReviewRepository(db)
 
-	bookService := service.NewBookService(bookRepo)
-	reviewService := service.NewReviewService(reviewRepo)
+	authClient := client.NewAuthClient(cfg.AuthServiceURL, cfg.ServiceKey, 15*time.Second)
+
+	bookService := service.NewBookService(bookRepo, reviewRepo, authClient)
+	reviewService := service.NewReviewService(reviewRepo, bookRepo, authClient)
 
 	bookHandler := handler.NewBookHandler(bookService)
 	reviewHandler := handler.NewReviewHandler(reviewService)
-
-	authClient := client.NewAuthClient(cfg.AuthServiceURL, cfg.ServiceKey, 15*time.Second)
 
 	mux := chi.NewRouter()
 	mux.Use(cors.Handler(cors.Options{

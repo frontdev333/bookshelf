@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bookshelf/books-service/internal/client"
 	"bookshelf/books-service/internal/domain"
 	"bookshelf/books-service/internal/repository"
 	"context"
@@ -23,10 +24,20 @@ var (
 
 type ReviewService struct {
 	reviewRepo *repository.ReviewRepository
+	bookRepo   *repository.BookRepository
+	aClient    *client.AuthClient
 }
 
-func NewReviewService(repo *repository.ReviewRepository) *ReviewService {
-	return &ReviewService{repo}
+func NewReviewService(
+	repo *repository.ReviewRepository,
+	bookRepo *repository.BookRepository,
+	authClient *client.AuthClient,
+) *ReviewService {
+	return &ReviewService{
+		repo,
+		bookRepo,
+		authClient,
+	}
 }
 
 func (s *ReviewService) Create(ctx context.Context, userID, bookID string, req domain.CreateReviewRequest) (*domain.ReviewResponse, error) {
@@ -72,7 +83,7 @@ func (s *ReviewService) Create(ctx context.Context, userID, bookID string, req d
 		UpdatedAt: time.Now(),
 	}
 
-	u, err := s.userRepo.GetByID(ctx, userID)
+	u, err := s.aClient.GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +98,7 @@ func (s *ReviewService) GetByID(ctx context.Context, id string) (*domain.ReviewR
 		return nil, ErrReviewNotFound
 	}
 
-	u, err := s.userRepo.GetByID(ctx, r.UserID)
+	u, err := s.aClient.GetUserByID(ctx, r.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +115,7 @@ func (s *ReviewService) ListByBookID(
 		return nil, ErrBookNotFound
 	}
 
-	list, count, err := s.reviewRepo.ListByBookID(ctx, bookID, page, limit)
+	list, err := s.reviewRepo.ListByBookID(ctx, bookID)
 	if err != nil {
 		return nil, err
 	}
@@ -113,30 +124,34 @@ func (s *ReviewService) ListByBookID(
 	uIDs := make([]string, 0, len(list))
 
 	for _, v := range list {
-
 		uIDs = append(uIDs, v.UserID)
 	}
 
+	users, err := s.aClient.GetUsersByIDs(ctx, uIDs)
+	if err != nil {
+		slog.Error("ReviewService ListByBookID()", "error", err)
+		return nil, err
+	}
+
+	authors := make(map[string]client.UserPublic, len(users))
+
+	for _, v := range users {
+		authors[v.ID] = v
+	}
+
 	for _, v := range list {
-
-		users, err := s.userRepo.GetByIDs(ctx, uIDs)
-		if err != nil {
-			slog.Error("ReviewService ListByBookID()", "error", err)
-			continue
-		}
-
-		u := users[v.UserID]
+		u := authors[v.UserID]
 		data = append(data, *v.ToResponse(u.ToSummary()))
 
 	}
 
 	return &domain.ReviewListResponse{
 		Data: data,
-		Pagination: domain2.Pagination{
+		Pagination: domain.Pagination{
 			Page:       page,
 			Limit:      limit,
-			Total:      count,
-			TotalPages: (count - limit + 1) / limit,
+			Total:      len(data),
+			TotalPages: (len(data) - limit + 1) / limit,
 		},
 	}, nil
 }
@@ -146,7 +161,7 @@ func (s *ReviewService) Update(
 	userID, reviewID string,
 	req domain.UpdateReviewRequest,
 ) (*domain.ReviewResponse, error) {
-	u, err := s.userRepo.GetByID(ctx, userID)
+	u, err := s.aClient.GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
