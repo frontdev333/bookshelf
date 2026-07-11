@@ -10,13 +10,14 @@ type Config struct {
 	Port           string
 	DatabaseURL    string
 	ServiceKey     string
+	JwtSecret      string
 	AuthServiceURL string
 }
 
 func Load() *Config {
 
 	portEnv := os.Getenv("PORT")
-	port := "8080"
+	port := "8082"
 	if portEnv != "" {
 		port = portEnv
 	}
@@ -39,10 +40,17 @@ func Load() *Config {
 		svcSecret = svcSecretEnv
 	}
 
+	authSvcUrlEnv := os.Getenv("AUTH_SERVICE_URL")
+	authSvcUrl := "http://auth-service:8082"
+	if authSvcUrlEnv != "" {
+		authSvcUrl = authSvcUrlEnv
+	}
+
 	return &Config{
 		Port:           port,
 		DatabaseURL:    dbUrl,
 		ServiceKey:     svcSecret,
-		AuthServiceURL: jwtSecret,
+		JwtSecret:      jwtSecret,
+		AuthServiceURL: authSvcUrl,
 	}
 }

@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"time"
 )
 
@@ -141,6 +143,11 @@ func (c *AuthClient) GetUsersByIDs(ctx context.Context, ids []string) ([]UserPub
 	}
 
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Warn("AuthClient.GetUsersByIDs", "status", resp.Status, "code", resp.StatusCode)
+		return nil, fmt.Errorf("AuthClient.GetUsersByIDs, status: %s code: %d", resp.Status, resp.StatusCode)
+	}
 
 	var dto []UserPublic
 

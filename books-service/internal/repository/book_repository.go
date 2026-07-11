@@ -67,7 +67,7 @@ func (r *BookRepository) List(
     ORDER BY %s %s LIMIT $3 OFFSET $4
     `
 
-	qList := fmt.Sprintf(rawQ, f.Order, f.Sort)
+	qList := fmt.Sprintf(rawQ, f.Sort, f.Order)
 
 	qCount := `SELECT COUNT(*) FROM books WHERE title LIKE $1 OR description LIKE $2`
 
@@ -91,7 +91,7 @@ func (r *BookRepository) ListByUserID(ctx context.Context, userID string, f doma
     OR description LIKE $3
 	ORDER BY %s %s LIMIT $4 OFFSET $5  
 	`
-	q := fmt.Sprintf(rawQ, f.Order, f.Sort)
+	q := fmt.Sprintf(rawQ, f.Sort, f.Order)
 	offset := (f.Page - 1) * f.Limit
 	var res []domain.Book
 
@@ -115,7 +115,7 @@ func (r *BookRepository) ListByUserID(ctx context.Context, userID string, f doma
     OR description LIKE $3
 	ORDER BY %s %s LIMIT $4 OFFSET $5  
 	`
-	q = fmt.Sprintf(rawQCount, f.Order, f.Sort)
+	q = fmt.Sprintf(rawQCount, f.Sort, f.Order)
 
 	var countRes int
 

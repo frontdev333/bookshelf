@@ -83,14 +83,20 @@ func (h *InternalHandler) GetUsersByIDs(w http.ResponseWriter, r *http.Request) 
 	}
 	defer r.Body.Close()
 
+	if dto.IDs == nil {
+		writeError(w, r, http.StatusBadRequest, "IDs_FORMAT_ERROR", "wrong ids format")
+	}
+
 	users, err := h.svc.GetUsersByIDs(r.Context(), dto.IDs)
 	if err != nil {
 		slog.Error("InternalHandler.GetUserByIDs", "error", err)
-		w.WriteHeader(http.StatusBadRequest)
+		writeError(w, r, http.StatusInternalServerError, "SERVER_ERROR", "error try later")
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(users)
+	if err = json.NewEncoder(w).Encode(users); err != nil {
+		slog.Error("InternalHandler.GetUsersByIDs", "error", err)
+	}
 }

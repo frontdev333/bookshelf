@@ -48,6 +48,24 @@ func (h *AuthHandler) Health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, v)
 }
 
+func (h *AuthHandler) Ready(w http.ResponseWriter, r *http.Request) {
+	type readyPong struct {
+		pong
+		Database string `json:"database"`
+	}
+
+	v := readyPong{
+		pong: pong{
+			Status:    "ok",
+			Version:   version,
+			Timestamp: time.Now(),
+		},
+		Database: "ok",
+	}
+
+	writeJSON(w, http.StatusOK, v)
+}
+
 func AuthMiddleware(svc *service.UserService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

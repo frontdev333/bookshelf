@@ -38,7 +38,7 @@ func main() {
 
 	mux := chi.NewRouter()
 	mux.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:5173"},
+		AllowedOrigins:   []string{"http://localhost:5174"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		ExposedHeaders:   []string{"Link"},
@@ -52,6 +52,7 @@ func main() {
 	mux.Use(middleware.Recoverer)
 	mux.Use(middleware.Timeout(stdTimeout))
 
+	mux.Get("/ready", h.Ready)
 	mux.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", h.Health)
 
@@ -69,7 +70,6 @@ func main() {
 	mux.Route("/internal/v1", func(r chi.Router) {
 		r.Use(handler.ServiceKeyMiddleware(cfg.ServiceKey))
 		r.Post("/auth/verify", internalHandler.VerifyToken)
-
 		r.Post("/users/batch", internalHandler.GetUsersByIDs)
 	})
 

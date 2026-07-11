@@ -53,9 +53,9 @@ services:
       context: ./books-service
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "8082:8082"
     environment:
-      - PORT=8080
+      - PORT=8082
       - DATABASE_URL=postgres://postgres:postgres@books-postgres:5432/books?sslmode=disable
       - AUTH_SERVICE_URL=http://auth-service:8081
     depends_on:
