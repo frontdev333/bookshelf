@@ -76,6 +76,9 @@ func (h *InternalHandler) GetUsersByIDs(w http.ResponseWriter, r *http.Request) 
 		IDs []string `json:"ids"`
 	}
 
+	body := r.Body
+	_ = body
+
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
 		slog.Error("InternalHandler.GetUserByIDs", "error", err)
 		w.WriteHeader(http.StatusBadRequest)

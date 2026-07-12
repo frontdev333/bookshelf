@@ -13,10 +13,18 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -gcflags="all=-N -l" -o main ./cmd/server
+
+# Debug stage — для дебага
+FROM golang:1.26.3-alpine AS debug
+WORKDIR /app
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
+COPY --from=builder /app/main .
+EXPOSE 8082 2345
+CMD ["dlv", "--listen=:2346", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "./main"]
 
 # Final stage
-FROM alpine:latest
+FROM alpine:latest AS production
 
 WORKDIR /app
 

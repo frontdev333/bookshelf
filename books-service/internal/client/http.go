@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
 	"net/http"
@@ -47,14 +48,14 @@ func (c *HTTPClient) Get(ctx context.Context, path string, headers map[string]st
 	return res, nil
 }
 
-func (c *HTTPClient) Post(ctx context.Context, path string, body interface{}, headers map[string]string) (*http.Response, error) {
+func (c *HTTPClient) Post(ctx context.Context, path string, body []byte, headers map[string]string) (*http.Response, error) {
 	path, err := url.JoinPath(c.BaseURL, path)
 	if err != nil {
 		slog.Error("HTTPClient.Post() url.JoinPath", "error", err)
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, path, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, path, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}

@@ -1,7 +1,6 @@
 package client
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -62,7 +61,7 @@ func (c *AuthClient) VerifyToken(ctx context.Context, token string) (*VerifyResp
 		return nil, err
 	}
 
-	resp, err := c.httpClient.Post(ctx, "/internal/v1/auth/verify", bytes.NewBuffer(pBytes), map[string]string{
+	resp, err := c.httpClient.Post(ctx, "/internal/v1/auth/verify", pBytes, map[string]string{
 		"Content-Type":  "application/json",
 		"X-Service-Key": c.serviceKey,
 	})
