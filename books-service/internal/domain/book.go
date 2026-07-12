@@ -3,6 +3,7 @@ package domain
 import (
 	"bookshelf/books-service/internal/client"
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -119,22 +120,22 @@ func (b *Book) ToResponse(creator client.UserSummary, reviewsCount *int) *BookRe
 }
 
 func (f *BookFilter) SeedDefaults() {
-	if f.Sort == nil {
+	if f.Sort == nil || strings.TrimSpace(*f.Sort) == "" {
 		sort := "id"
 		f.Sort = &sort
 	}
 
-	if f.Order == nil {
+	if f.Order == nil || strings.TrimSpace(*f.Order) == "" {
 		order := "desc"
 		f.Order = &order
 	}
 
-	if f.Limit == nil {
+	if f.Limit == nil || strings.TrimSpace(*f.Limit) == "" {
 		limit := "10"
-		f.Order = &limit
+		f.Limit = &limit
 	}
 
-	if f.Page == nil {
+	if f.Page == nil || strings.TrimSpace(*f.Page) == "" {
 		page := "1"
 		f.Page = &page
 	}

@@ -28,6 +28,17 @@ func (h *BookHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	list, err := h.svc.List(r.Context(), f)
 	if err != nil {
+		if errors.Is(err, service.ErrInvalidPagination) {
+			writeError(w, r, http.StatusBadRequest, "INVALID_PAGINATION", "page and limit must be positive integers")
+			return
+		}
+
+		if errors.Is(err, service.ErrCreatorLookupError) {
+			slog.Error("book_handler.ListBook()", "error", err)
+			writeError(w, r, http.StatusBadGateway, "AUTH_SERVICE_ERROR", "failed to load book creator")
+			return
+		}
+
 		slog.Error("book_handler.ListBook()", "error", err)
 		writeError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "unknown error")
 		return
@@ -43,6 +54,11 @@ func (h *BookHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, service.ErrBookNotFound) {
 			writeError(w, r, http.StatusNotFound, "BOOK_NOT_FOUND", "book not found")
+			return
+		}
+		if errors.Is(err, service.ErrCreatorLookupError) {
+			slog.Error("book_handler.GetBook()", "error", err)
+			writeError(w, r, http.StatusBadGateway, "AUTH_SERVICE_ERROR", "failed to load book creator")
 			return
 		}
 		slog.Error("book_handler.GetBook()", "error", err)
@@ -82,10 +98,19 @@ func (h *BookHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeValidationError(w, r, errDetails)
 		return
 	}
-	errDetails = []domain.ErrorDetail{}
 
 	b, err := h.svc.Create(r.Context(), userID, req)
 	if err != nil {
+		if handled := writeBookValidationError(w, r, err); handled {
+			return
+		}
+
+		if errors.Is(err, service.ErrCreatorLookupError) {
+			slog.Error("book_handler.CreateBook()", "error", err)
+			writeError(w, r, http.StatusBadGateway, "AUTH_SERVICE_ERROR", "failed to load book creator")
+			return
+		}
+
 		slog.Error("book_handler.CreateBook()", "error", err)
 		writeError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "unknown error")
 		return
@@ -118,6 +143,16 @@ func (h *BookHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if handled := writeBookValidationError(w, r, err); handled {
+			return
+		}
+
+		if errors.Is(err, service.ErrCreatorLookupError) {
+			slog.Error("book_handler.UpdateBook()", "error", err)
+			writeError(w, r, http.StatusBadGateway, "AUTH_SERVICE_ERROR", "failed to load book creator")
+			return
+		}
+
 		slog.Error("book_handler.UpdateBook()", "error", err)
 		writeError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "unknown error")
 		return
@@ -147,4 +182,23 @@ func (h *BookHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func writeBookValidationError(w http.ResponseWriter, r *http.Request, err error) bool {
+	switch {
+	case errors.Is(err, service.ErrBookTitleEmpty):
+		writeValidationError(w, r, []domain.ErrorDetail{{
+			Field:   "Title",
+			Message: "Title is required",
+		}})
+		return true
+	case errors.Is(err, service.ErrBookAuthorEmpty):
+		writeValidationError(w, r, []domain.ErrorDetail{{
+			Field:   "Author",
+			Message: "Author is required",
+		}})
+		return true
+	default:
+		return false
+	}
 }

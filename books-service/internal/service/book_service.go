@@ -7,16 +7,19 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log/slog"
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
 var (
-	ErrBookNotFound    = errors.New("book not found")
-	ErrNotBookOwner    = errors.New("you are not the owner of this book")
-	ErrBookTitleEmpty  = errors.New("book title is empty")
-	ErrBookAuthorEmpty = errors.New("book author is empty")
+	ErrBookNotFound       = errors.New("book not found")
+	ErrNotBookOwner       = errors.New("you are not the owner of this book")
+	ErrBookTitleEmpty     = errors.New("book title is empty")
+	ErrBookAuthorEmpty    = errors.New("book author is empty")
+	ErrInvalidPagination  = errors.New("invalid pagination parameters")
+	ErrCreatorLookupError = errors.New("book creator lookup failed")
 )
 
 type BookService struct {
@@ -42,11 +45,11 @@ func (s *BookService) Create(
 	userId string,
 	req domain.CreateBookRequest,
 ) (*domain.BookResponse, error) {
-	if req.Title == "" {
+	if strings.TrimSpace(req.Title) == "" {
 		return nil, ErrBookTitleEmpty
 	}
 
-	if req.Author == "" {
+	if strings.TrimSpace(req.Author) == "" {
 		return nil, ErrBookAuthorEmpty
 	}
 
@@ -87,32 +90,31 @@ func (s *BookService) Create(
 		AverageRating: sql.NullFloat64{},
 	}
 
+	u, err := s.aClient.GetUserByID(ctx, userId)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrCreatorLookupError, err)
+	}
+
 	if err := s.bookRepo.Create(ctx, b); err != nil {
 		return nil, err
 	}
 
-	reviewsCount, err := s.reviewRepo.GetReviewsCount(ctx, b.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	u, err := s.aClient.GetUserByID(ctx, userId)
-	if err != nil {
-		return nil, err
-	}
-
+	reviewsCount := 0
 	return b.ToResponse(u.ToSummary(), &reviewsCount), nil
 }
 
 func (s *BookService) GetByID(ctx context.Context, id string) (*domain.BookResponse, error) {
 	b, err := s.bookRepo.GetByID(ctx, id)
 	if err != nil {
+		if errors.Is(err, repository.ErrBookNotFound) {
+			return nil, ErrBookNotFound
+		}
 		return nil, err
 	}
 
 	u, err := s.aClient.GetUserByID(ctx, b.UserID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrCreatorLookupError, err)
 	}
 
 	reviewsCount, err := s.reviewRepo.GetReviewsCount(ctx, id)
@@ -126,15 +128,9 @@ func (s *BookService) GetByID(ctx context.Context, id string) (*domain.BookRespo
 func (s *BookService) List(ctx context.Context, f domain.BookFilter) (*domain.BookListResponse, error) {
 	f.SeedDefaults()
 
-	var order string
-	var sort string
-	var search string
-	var page int
-	var limit int
-	var err error
-
+	sort := "created_at"
 	if f.Sort != nil {
-		switch *f.Sort {
+		switch strings.ToLower(strings.TrimSpace(*f.Sort)) {
 		case "author":
 			sort = "author"
 		case "published_year":
@@ -143,48 +139,32 @@ func (s *BookService) List(ctx context.Context, f domain.BookFilter) (*domain.Bo
 			sort = "created_by"
 		case "updated_at":
 			sort = "updated_at"
-		default:
-			sort = "created_at"
 		}
 	}
 
-	if f.Order == nil || *f.Order != "DESC" && *f.Order != "ASC" {
-		order = "DESC"
-	} else {
-		order = "ASC"
+	order := "DESC"
+	if f.Order != nil {
+		switch strings.ToUpper(strings.TrimSpace(*f.Order)) {
+		case "ASC":
+			order = "ASC"
+		case "DESC":
+			order = "DESC"
+		}
 	}
 
+	search := ""
 	if f.Search != nil {
-		search = "%" + *f.Search + "%"
+		search = "%" + strings.TrimSpace(*f.Search) + "%"
 	}
 
-	cPage, err := strconv.Atoi(*f.Page)
-	if err != nil {
-		return nil, err
+	page, err := strconv.Atoi(strings.TrimSpace(*f.Page))
+	if err != nil || page <= 0 {
+		return nil, ErrInvalidPagination
 	}
 
-	cLimit, err := strconv.Atoi(*f.Limit)
-	if err != nil {
-		return nil, err
-	}
-
-	if f.Page != nil {
-		page, err = strconv.Atoi(*f.Page)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		page = 1
-	}
-
-	if f.Limit != nil {
-
-		limit, err = strconv.Atoi(*f.Limit)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		limit = 10
+	limit, err := strconv.Atoi(strings.TrimSpace(*f.Limit))
+	if err != nil || limit <= 0 {
+		return nil, ErrInvalidPagination
 	}
 
 	params := domain.ListParams{
@@ -200,17 +180,33 @@ func (s *BookService) List(ctx context.Context, f domain.BookFilter) (*domain.Bo
 	}
 
 	booksResponse := make([]domain.BookResponse, 0, len(list))
-	creatorsIDs := make([]string, 0, len(list))
+	creatorIDs := make([]string, 0, len(list))
 	booksIDs := make([]string, 0, len(list))
+	seenCreators := make(map[string]struct{}, len(list))
+
+	if len(list) == 0 {
+		return &domain.BookListResponse{
+			Data: []domain.BookResponse{},
+			Pagination: domain.Pagination{
+				Page:       page,
+				Limit:      limit,
+				Total:      count,
+				TotalPages: (count + limit - 1) / limit,
+			},
+		}, nil
+	}
 
 	for _, v := range list {
-		creatorsIDs = append(creatorsIDs, v.UserID)
+		if _, ok := seenCreators[v.UserID]; !ok {
+			seenCreators[v.UserID] = struct{}{}
+			creatorIDs = append(creatorIDs, v.UserID)
+		}
 		booksIDs = append(booksIDs, v.ID)
 	}
 
-	users, err := s.aClient.GetUsersByIDs(ctx, creatorsIDs)
+	users, err := s.aClient.GetUsersByIDs(ctx, creatorIDs)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrCreatorLookupError, err)
 	}
 
 	creators := make(map[string]client.UserPublic, len(users))
@@ -227,8 +223,7 @@ func (s *BookService) List(ctx context.Context, f domain.BookFilter) (*domain.Bo
 	for _, v := range list {
 		u, ok := creators[v.UserID]
 		if !ok {
-			slog.Error("BookService List()", "error", "creator not found", "user_id", v.UserID)
-			continue
+			return nil, fmt.Errorf("%w: user_id=%s", ErrCreatorLookupError, v.UserID)
 		}
 
 		reviewsCount := 0
@@ -244,10 +239,10 @@ func (s *BookService) List(ctx context.Context, f domain.BookFilter) (*domain.Bo
 	return &domain.BookListResponse{
 		Data: booksResponse,
 		Pagination: domain.Pagination{
-			Page:       cPage,
-			Limit:      cLimit,
+			Page:       page,
+			Limit:      limit,
 			Total:      count,
-			TotalPages: (count + cLimit - 1) / cLimit,
+			TotalPages: (count + limit - 1) / limit,
 		},
 	}, nil
 }
@@ -255,7 +250,10 @@ func (s *BookService) List(ctx context.Context, f domain.BookFilter) (*domain.Bo
 func (s *BookService) Update(ctx context.Context, userID, bookID string, req domain.UpdateBookRequest) (*domain.BookResponse, error) {
 	b, err := s.bookRepo.GetByID(ctx, bookID)
 	if err != nil {
-		return nil, ErrBookNotFound
+		if errors.Is(err, repository.ErrBookNotFound) {
+			return nil, ErrBookNotFound
+		}
+		return nil, err
 	}
 
 	if b.UserID != userID {
@@ -263,6 +261,9 @@ func (s *BookService) Update(ctx context.Context, userID, bookID string, req dom
 	}
 
 	if req.Author != nil {
+		if strings.TrimSpace(*req.Author) == "" {
+			return nil, ErrBookAuthorEmpty
+		}
 		b.Author = *req.Author
 	}
 
@@ -281,7 +282,20 @@ func (s *BookService) Update(ctx context.Context, userID, bookID string, req dom
 	}
 
 	if req.Title != nil {
+		if strings.TrimSpace(*req.Title) == "" {
+			return nil, ErrBookTitleEmpty
+		}
 		b.Title = *req.Title
+	}
+
+	u, err := s.aClient.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrCreatorLookupError, err)
+	}
+
+	reviewsCount, err := s.reviewRepo.GetReviewsCount(ctx, b.ID)
+	if err != nil {
+		return nil, err
 	}
 
 	if req.PublishedYear != nil {
@@ -292,16 +306,9 @@ func (s *BookService) Update(ctx context.Context, userID, bookID string, req dom
 	}
 
 	if err = s.bookRepo.Update(ctx, b); err != nil {
-		return nil, err
-	}
-
-	u, err := s.aClient.GetUserByID(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	reviewsCount, err := s.reviewRepo.GetReviewsCount(ctx, b.ID)
-	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrBookNotFound
+		}
 		return nil, err
 	}
 
@@ -311,7 +318,10 @@ func (s *BookService) Update(ctx context.Context, userID, bookID string, req dom
 func (s *BookService) Delete(ctx context.Context, userID, bookID string) error {
 	b, err := s.bookRepo.GetByID(ctx, bookID)
 	if err != nil {
-		return ErrBookNotFound
+		if errors.Is(err, repository.ErrBookNotFound) {
+			return ErrBookNotFound
+		}
+		return err
 	}
 
 	if b.UserID != userID {
