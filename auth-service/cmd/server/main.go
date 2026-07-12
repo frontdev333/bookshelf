@@ -62,7 +62,7 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(handler.AuthMiddleware(userService))
 
-			r.Get("/users/me", h.GetMe)
+			r.Post("/users/me", h.GetMe)
 			r.Put("/users/me", h.UpdateMe)
 		})
 	})
